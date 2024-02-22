@@ -14,29 +14,20 @@ void print_file_info(const char *filename, struct stat *statbuf);
 
 void _ls(const char *dir, int op_a, int op_l, int op_R, int depth)
 {
-    struct dirent *d;
-    struct stat statbuf; // Déclaration de statbuf
+    int total_size = 0; // Variable pour stocker le total des tailles des fichiers
+
+    // Ouvrir le répertoire
     DIR *dh = opendir(dir);
     if (!dh)
     {
-        if (errno == ENOENT)
-        {
-            perror("Directory doesn't exist");
-        }
-        else
-        {
-            perror("Unable to read directory");
-        }
+        // Gérer les erreurs
+        perror("Unable to read directory");
         exit(EXIT_FAILURE);
     }
 
-    int total_size = 0; // Initialisation de total_size
+    struct dirent *d;
 
-    // Array to store directory entries
-    struct dirent **entries = NULL;
-    int num_entries = 0;
-
-    // Read all directory entries and store them in the array
+    // Lire tous les fichiers du répertoire
     while ((d = readdir(dh)) != NULL)
     {
         if (!op_a && d->d_name[0] == '.')
@@ -45,58 +36,29 @@ void _ls(const char *dir, int op_a, int op_l, int op_R, int depth)
         char path[1024];
         snprintf(path, sizeof(path), "%s/%s", dir, d->d_name);
 
+        struct stat statbuf;
         if (lstat(path, &statbuf) == -1)
         {
+            // Gérer les erreurs
             perror("Failed to get file status");
             continue;
         }
 
-        if (S_ISDIR(statbuf.st_mode))
-        {
-            if (op_R && strcmp(d->d_name, ".") != 0 && strcmp(d->d_name, "..") != 0)
-            {
-                printf("\n%*s%s:\n", depth * 2, "", d->d_name); // Print subdirectory name
-                _ls(path, op_a, op_l, op_R, depth + 1);         // Recursively list subdirectory
-            }
-        }
-        else
-        {
-            total_size += statbuf.st_size; // Ajout de la taille du fichier au total_size
-
-            // Store non-directory entries in the array
-            entries = realloc(entries, (num_entries + 1) * sizeof(struct dirent *));
-            entries[num_entries++] = d;
-        }
-    }
-
-    // Print total size
-    printf("total %d\n", total_size);
-
-    // List the directory entries (files) after exploring subdirectories
-    for (int i = 0; i < num_entries; i++)
-    {
-        d = entries[i];
+        // Ajouter la taille du fichier à la somme totale
+        total_size += statbuf.st_size;
+        // Afficher les informations du fichier si -l est spécifié
         if (op_l)
         {
-            char path[1024];
-            snprintf(path, sizeof(path), "%s/%s", dir, d->d_name);
-
-            if (lstat(path, &statbuf) == -1)
-            {
-                perror("Failed to get file status");
-                continue;
-            }
             print_file_info(d->d_name, &statbuf);
         }
         else
         {
-            printf("%*s%s  ", depth * 2, "", d->d_name);
+            // Afficher le nom du fichier
+            printf("%s  ", d->d_name);
         }
     }
 
-    // Free the array
-    free(entries);
-
+    // Fermer le répertoire
     closedir(dh);
 }
 
