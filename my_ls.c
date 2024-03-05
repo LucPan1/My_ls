@@ -7,58 +7,56 @@
 #include <pwd.h>
 #include <grp.h>
 #include <time.h>
+#include <ctype.h>
+#include <sys/ioctl.h>
 
-void _ls(const char *dir, int op_a, int op_l, int op_R, int depth);
+void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L);
 
 void print_file_info(const char *filename, struct stat *statbuf);
 
-void _ls(const char *dir, int op_a, int op_l, int op_R, int depth)
+void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L)
 {
-    int total_size = 0; // Variable pour stocker le total des tailles des fichiers
-
-    // Ouvrir le répertoire
+    // Open the directory
     DIR *dh = opendir(dir);
     if (!dh)
     {
-        // Gérer les erreurs
+        // Handle errors
         perror("Unable to read directory");
         exit(EXIT_FAILURE);
     }
 
     struct dirent *d;
 
-    // Lire tous les fichiers du répertoire
+    // Print filenames or file details depending on the option
     while ((d = readdir(dh)) != NULL)
     {
-        if (!op_a && d->d_name[0] == '.')
+        if ((!op_a && d->d_name[0] == '.') || (!op_A && (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0)))
             continue;
 
-        char path[1024];
-        snprintf(path, sizeof(path), "%s/%s", dir, d->d_name);
-
-        struct stat statbuf;
-        if (lstat(path, &statbuf) == -1)
-        {
-            // Gérer les erreurs
-            perror("Failed to get file status");
-            continue;
-        }
-
-        // Ajouter la taille du fichier à la somme totale
-        total_size += statbuf.st_size;
-        // Afficher les informations du fichier si -l est spécifié
         if (op_l)
         {
+            // If -l option is enabled, print file details
+            char path[PATH_MAX];
+            snprintf(path, sizeof(path), "%s/%s", dir, d->d_name);
+
+            struct stat statbuf;
+            if (stat(path, &statbuf) == -1)
+            {
+                // Handle error
+                perror("Failed to get file status");
+                exit(EXIT_FAILURE);
+            }
+
             print_file_info(d->d_name, &statbuf);
         }
         else
         {
-            // Afficher le nom du fichier
-            printf("%s  ", d->d_name);
+            // If -l option is not enabled, print only filenames
+            printf("%s\n", d->d_name);
         }
     }
 
-    // Fermer le répertoire
+    // Close the directory
     closedir(dh);
 }
 
@@ -77,7 +75,7 @@ void print_file_info(const char *filename, struct stat *statbuf)
     printf((statbuf->st_mode & S_IXOTH) ? "x" : "-");
     printf(" ");
 
-    // Print number of links²
+    // Print number of links
     printf("%lu ", statbuf->st_nlink);
 
     // Print owner name
@@ -118,11 +116,11 @@ void print_file_info(const char *filename, struct stat *statbuf)
 
 int main(int argc, const char *argv[])
 {
-    int op_a = 0, op_l = 0, op_R = 0;
+    int op_a = 0, op_l = 0, op_R = 0, op_A = 0, op_L = 0;
 
     if (argc == 1)
     {
-        _ls(".", op_a, op_l, op_R, 0);
+        _ls(".", op_a, op_l, op_R, op_A, op_L);
     }
     else
     {
@@ -133,7 +131,7 @@ int main(int argc, const char *argv[])
                 char *p = (char *)(argv[i] + 1);
                 while (*p)
                 {
-                    switch (*p)
+                    switch (tolower(*p)) // Convert the option to lowercase
                     {
                     case 'a':
                         op_a = 1;
@@ -141,12 +139,18 @@ int main(int argc, const char *argv[])
                     case 'l':
                         op_l = 1;
                         break;
-                    case 'R':
-                        op_R = 1;
-                        break;
                     case 'r':
                         fprintf(stderr, "Option '-r' is not supported.\n");
                         exit(EXIT_FAILURE);
+                    case 'R':
+                        op_R = 1;
+                        break;
+                    case 'A':
+                        op_A = 1;
+                        break;
+                    case 'L':
+                        op_L = 1;
+                        break;
                     default:
                         fprintf(stderr, "Option '%c' not available\n", *p);
                         exit(EXIT_FAILURE);
@@ -156,11 +160,11 @@ int main(int argc, const char *argv[])
             }
             else
             {
-                fprintf(stderr, "Usage: %s [-a] [-l] [-R]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [-a] [-l] [-R] [-A] [-L]\n", argv[0]);
                 exit(EXIT_FAILURE);
             }
         }
-        _ls(".", op_a, op_l, op_R, 0);
+        _ls(".", op_a, op_l, op_R, op_A, op_L);
     }
 
     return 0;
