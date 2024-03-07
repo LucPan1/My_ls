@@ -10,73 +10,32 @@
 #include <ctype.h>
 #include <sys/ioctl.h>
 
-void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L);
+void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int op_d);
 
 void print_file_info(const char *filename, struct stat *statbuf);
 
-void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L)
+void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int op_d)
 {
-    // Open the directory
+
     DIR *dh = opendir(dir);
     if (!dh)
     {
-        // Handle errors
+
         perror("Unable to read directory");
         exit(EXIT_FAILURE);
     }
 
-    struct dirent *d;
-    int printed = 0; // Track if anything is printed
-
-    // Print filenames or file details depending on the option
-    while ((d = readdir(dh)) != NULL)
+    if (op_d)
     {
-        // Exclude hidden entries if -a option is not provided
-        if (!op_a && d->d_name[0] == '.')
-        {
-            // Exclude . and .. entries
-            if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0)
-                continue;
-
-            // Exclude other hidden entries
-            continue;
-        }
-
-        if (op_l)
-        {
-            // If -l option is enabled, print file details
-            char path[PATH_MAX];
-            snprintf(path, sizeof(path), "%s/%s", dir, d->d_name);
-
-            struct stat statbuf;
-            if (stat(path, &statbuf) == -1)
-            {
-                // Handle error
-                perror("Failed to get file status");
-                exit(EXIT_FAILURE);
-            }
-
-            print_file_info(d->d_name, &statbuf);
-        }
-        else
-        {
-            // If -l option is not enabled, print only filenames
-            printf("%-10s ", d->d_name); // Utilisation de %-10s pour aligner à gauche avec une largeur de 10 caractères
-            printed = 1;
-        }
+        printf("%s\n", dir);
+        closedir(dh);
+        return;
     }
-
-    // Close the directory
-    closedir(dh);
-
-    // Ajouter une nouvelle ligne à la fin si -l option n'est pas spécifiée et si quelque chose a été imprimé
-    if (!op_l && printed)
-        printf("\n");
 }
 
 void print_file_info(const char *filename, struct stat *statbuf)
 {
-    // Print file type and permissions
+
     printf((S_ISDIR(statbuf->st_mode)) ? "d" : "-");
     printf((statbuf->st_mode & S_IRUSR) ? "r" : "-");
     printf((statbuf->st_mode & S_IWUSR) ? "w" : "-");
@@ -88,49 +47,55 @@ void print_file_info(const char *filename, struct stat *statbuf)
     printf((statbuf->st_mode & S_IWOTH) ? "w" : "-");
     printf((statbuf->st_mode & S_IXOTH) ? "x" : "-");
 
-    // Print number of links
-    printf(" %ld", (long)statbuf->st_nlink);
+    int nlink_width = snprintf(NULL, 0, "%ld", statbuf->st_nlink);
 
-    // Print owner name
+    printf("%*ld ", nlink_width, statbuf->st_nlink);
+
     struct passwd *pw = getpwuid(statbuf->st_uid);
-    if (pw != NULL)
-        printf(" %s", pw->pw_name);
+    if (pw)
+    {
+        printf("%s ", pw->pw_name);
+    }
     else
-        printf(" %d", statbuf->st_uid);
+    {
+        printf("%d ", statbuf->st_uid);
+    }
 
-    // Print group name
     struct group *gr = getgrgid(statbuf->st_gid);
-    if (gr != NULL)
-        printf(" %s", gr->gr_name);
+    if (gr)
+    {
+        printf("%s ", gr->gr_name);
+    }
     else
-        printf(" %d", statbuf->st_gid);
+    {
+        printf("%d ", statbuf->st_gid);
+    }
 
-    // Print file size
-    printf(" %lld", (long long)statbuf->st_size);
+    int size_width = snprintf(NULL, 0, "%lld", (long long)statbuf->st_size);
 
-    // Print last modification time
+    printf("%*lld ", size_width, (long long)statbuf->st_size);
+
     struct tm *tm_info;
     char time_str[20];
     tm_info = localtime(&(statbuf->st_mtime));
-    strftime(time_str, sizeof(time_str), "%b %d %H:%M", tm_info);
-    printf(" %s", time_str);
+    strftime(time_str, 20, "%b %d %H:%M", tm_info);
+    printf("%s ", time_str);
 
-    // Print file name
-    printf(" %s\n", filename);
+    printf("%s\n", filename);
 }
 
 int main(int argc, const char *argv[])
 {
-    int op_a = 0, op_l = 0, op_R = 0, op_A = 0, op_L = 0;
+    int op_a = 0, op_l = 0, op_R = 0, op_A = 0, op_L = 0, op_d = 0;
 
     if (argc == 1)
     {
-        // Si aucune option n'est fournie, le comportement par défaut est de lister le contenu du répertoire sans les détails
-        _ls(".", op_a, op_l, op_R, op_A, op_L);
+
+        _ls(".", op_a, op_l, op_R, op_A, op_L, op_d);
     }
     else
     {
-        // Analyser les options fournies en ligne de commande
+
         for (int i = 1; i < argc; i++)
         {
             if (argv[i][0] == '-')
@@ -138,7 +103,7 @@ int main(int argc, const char *argv[])
                 char *p = (char *)(argv[i] + 1);
                 while (*p)
                 {
-                    switch (tolower(*p)) // Convertir l'option en minuscule
+                    switch (tolower(*p))
                     {
                     case 'a':
                         op_a = 1;
@@ -158,6 +123,9 @@ int main(int argc, const char *argv[])
                     case 'L':
                         op_L = 1;
                         break;
+                    case 'd':
+                        op_d = 1;
+                        break;
                     default:
                         fprintf(stderr, "Option '%c' not available\n", *p);
                         exit(EXIT_FAILURE);
@@ -167,21 +135,19 @@ int main(int argc, const char *argv[])
             }
             else
             {
-                fprintf(stderr, "Usage: %s [-a] [-l] [-R] [-A] [-L]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [-a] [-l] [-R] [-A] [-L] [-d]\n", argv[0]);
                 exit(EXIT_FAILURE);
             }
         }
 
-        // Vérifier si l'option -l est activée
         if (op_l)
         {
-            // Si l'option -l est activée, lister le contenu du répertoire avec les détails
-            _ls(".", op_a, op_l, op_R, op_A, op_L);
+
+            _ls(".", op_a, op_l, op_R, op_A, op_L, op_d);
         }
         else
         {
-            // Si l'option -l n'est pas activée, lister le contenu du répertoire sans les détails
-            _ls(".", op_a, op_l, op_R, op_A, op_L);
+            _ls(".", op_a, op_l, op_R, op_A, op_L, op_d);
         }
     }
 
