@@ -14,62 +14,76 @@ void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L);
 
 void print_file_info(const char *filename, struct stat *statbuf);
 
+// Comparateur pour la fonction de tri
+int compare(const void *a, const void *b)
+{
+    return strcmp(*(const char **)b, *(const char **)a);
+}
+
 void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L)
 {
-    // Open the directory
     DIR *dh = opendir(dir);
     if (!dh)
     {
-        // Handle errors
         perror("Unable to read directory");
         exit(EXIT_FAILURE);
     }
 
     struct dirent *d;
-    int printed = 0; // Track if anything is printed
+    int printed = 0;
+    int num_entries = 0;
+    char **entries = NULL;
 
-    // Print filenames or file details depending on the option
+    // Lire les noms de fichiers dans un tableau
     while ((d = readdir(dh)) != NULL)
     {
-        // Exclude hidden entries if -a option is not provided
         if (!op_a && d->d_name[0] == '.')
         {
-            // Exclude . and .. entries
             if (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0)
                 continue;
 
-            // Exclude other hidden entries
             continue;
         }
 
+        entries = realloc(entries, (num_entries + 1) * sizeof(char *));
+        entries[num_entries] = strdup(d->d_name);
+        num_entries++;
+    }
+
+    // Fermer le répertoire
+    closedir(dh);
+
+    // Trier les noms de fichiers
+    qsort(entries, num_entries, sizeof(char *), compare);
+
+    // Afficher les noms de fichiers triés
+    for (int i = 0; i < num_entries; i++)
+    {
         if (op_l)
         {
-            // If -l option is enabled, print file details
             char path[PATH_MAX];
-            snprintf(path, sizeof(path), "%s/%s", dir, d->d_name);
+            snprintf(path, sizeof(path), "%s/%s", dir, entries[i]);
 
             struct stat statbuf;
             if (stat(path, &statbuf) == -1)
             {
-                // Handle error
                 perror("Failed to get file status");
                 exit(EXIT_FAILURE);
             }
 
-            print_file_info(d->d_name, &statbuf);
+            print_file_info(entries[i], &statbuf);
         }
         else
         {
-            // If -l option is not enabled, print only filenames
-            printf("%-10s ", d->d_name); // Utilisation de %-10s pour aligner à gauche avec une largeur de 10 caractères
+            printf("%s  ", entries[i]);
             printed = 1;
         }
+
+        free(entries[i]);
     }
 
-    // Close the directory
-    closedir(dh);
+    free(entries);
 
-    // Ajouter une nouvelle ligne à la fin si -l option n'est pas spécifiée et si quelque chose a été imprimé
     if (!op_l && printed)
         printf("\n");
 }
@@ -106,14 +120,14 @@ void print_file_info(const char *filename, struct stat *statbuf)
         printf(" %d", statbuf->st_gid);
 
     // Print file size
-    printf(" %lld", (long long)statbuf->st_size);
+    printf(" %lld ", (long long)statbuf->st_size);
 
     // Print last modification time
     struct tm *tm_info;
     char time_str[20];
     tm_info = localtime(&(statbuf->st_mtime));
     strftime(time_str, sizeof(time_str), "%b %d %H:%M", tm_info);
-    printf(" %s", time_str);
+    printf(" %s ", time_str);
 
     // Print file name
     printf(" %s\n", filename);
