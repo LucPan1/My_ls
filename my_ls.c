@@ -48,15 +48,19 @@ void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int 
     // Read file names in the directory
     while ((d = readdir(dh)) != NULL)
     {
+        // Include . and .. entries if -a option is specified
+        if (op_a && (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0))
+        {
+            files[count++] = strdup(d->d_name);
+            continue;
+        }
+
         // Exclude hidden entries if -a option is not provided
-        if ((!op_a && !op_A) && d->d_name[0] == '.')
+        if (!op_a && d->d_name[0] == '.')
         {
             // Exclude other hidden entries
             continue;
         }
-        // Exclude . and .. entries if -A option is specified
-        if (!op_A && (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0))
-            continue;
 
         // Store file name in the array
         files[count++] = strdup(d->d_name);
