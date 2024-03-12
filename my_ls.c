@@ -203,7 +203,7 @@ int main(int argc, const char *argv[])
                         op_L = 1;
                         break;
                     case 'd':
-                        op_d = 1;
+                        op_d = 1; // Mark -d option as enabled
                         break;
                     default:
                         fprintf(stderr, "Option '%c' not available\n", *p);
@@ -214,8 +214,10 @@ int main(int argc, const char *argv[])
             }
             else
             {
-                fprintf(stderr, "Usage: %s [-a] [-l] [-R] [-A] [-L] [-d]\n", argv[0]);
-                exit(EXIT_FAILURE);
+                // If a non-option argument is encountered, treat it as the directory to list
+                _ls(argv[i], op_a, op_l, op_R, op_A, op_L, op_d, op_r);
+                // Exit after processing the specified directory
+                return 0;
             }
         }
 
