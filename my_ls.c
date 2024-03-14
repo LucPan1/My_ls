@@ -236,67 +236,60 @@ int main(int argc, const char *argv[])
 {
 	int op_a = 0, op_l = 0, op_R = 0, op_A = 0, op_L = 0, op_d = 0, op_r = 0, op_t = 0, op_S = 0;
 
-	if (argc == 1)
+	// Iterate through command-line arguments
+	for (int i = 1; i < argc; i++)
 	{
-		// If no option is provided, default behavior is to list directory contents without details
-		_ls(".", op_a, op_l, op_R, op_A, op_L, op_d, op_r, op_t, op_S);
-	}
-	else
-	{
-		// Parse command-line options provided
-		for (int i = 1; i < argc; i++)
+		if (argv[i][0] == '-')
 		{
-			if (argv[i][0] == '-')
+			char *p = (char *)(argv[i] + 1);
+			while (*p)
 			{
-				char *p = (char *)(argv[i] + 1);
-				while (*p)
+				switch (tolower(*p)) // Convert option to lowercase
 				{
-					switch (tolower(*p)) // Convert option to lowercase
-					{
-					case 'a':
-						op_a = 1;
-						break;
-					case 'l':
-						op_l = 1;
-						break;
-					case 'r':
-						op_r = 1;
-						break;
-					case 'R':
-						op_R = 1;
-						break;
-					case 'A':
-						op_A = 1;
-						break;
-					case 'L':
-						op_L = 1;
-						break;
-					case 'd':
-						op_d = 1; // Mark -d option as enabled
-						break;
-					case 't':
-						op_t = 1; // Mark -t option as enabled
-						break;
-					case 'S':
-						op_S = 1; // Mark -S option as enabled
-						break;
-					default:
-						fprintf(stderr, "Option '%c' not available\n", *p);
-						exit(EXIT_FAILURE);
-					}
-					p++;
+				case 'a':
+					op_a = 1;
+					break;
+				case 'l':
+					op_l = 1;
+					break;
+				case 'r':
+					op_r = 1;
+					break;
+				case 'R':
+					op_R = 1;
+					break;
+				case 'A':
+					op_A = 1;
+					break;
+				case 'L':
+					op_L = 1;
+					break;
+				case 'd':
+					op_d = 1; // Mark -d option as enabled
+					break;
+				case 't':
+					op_t = 1; // Mark -t option as enabled
+					break;
+				case 'S':
+					op_S = 1; // Mark -S option as enabled
+					break;
+				default:
+					fprintf(stderr, "Option '%c' not available\n", *p);
+					exit(EXIT_FAILURE);
 				}
-			}
-			else
-			{
-				// If a non-option argument is encountered, treat it as the directory to list
-				_ls(argv[i], op_a, op_l, op_R, op_A, op_L, op_d, op_r, op_t, op_S);
-				// Exit after processing the specified directory
-				return 0;
+				p++;
 			}
 		}
+		else
+		{
+			// Treat non-option arguments as directories or files to list
+			_ls(argv[i], op_a, op_l, op_R, op_A, op_L, op_d, op_r, op_t, op_S);
+		}
+	}
 
-		// Call _ls with specified options
+	// If no non-option arguments are provided, list the current directory
+	if (argc == 1 || (argc == 2 && (op_a || op_l || op_R || op_A || op_L || op_d || op_r || op_t || op_S)))
+	{
 		_ls(".", op_a, op_l, op_R, op_A, op_L, op_d, op_r, op_t, op_S);
 	}
 
