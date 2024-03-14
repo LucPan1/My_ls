@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #include <pwd.h>
 #include <grp.h>
@@ -106,7 +107,13 @@ void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int 
 		perror("Cannot read directory");
 		exit(EXIT_FAILURE);
 	}
+	if (op_d)
+	{
 
+		printf("%s\n", dir);
+
+		return;
+	}
 	struct dirent *d;
 	int printed = 0; // Track if anything is printed
 
@@ -235,6 +242,7 @@ void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int 
 int main(int argc, const char *argv[])
 {
 	int op_a = 0, op_l = 0, op_R = 0, op_A = 0, op_L = 0, op_d = 0, op_r = 0, op_t = 0, op_S = 0;
+	const char *dir = ".";
 
 	// Iterate through command-line arguments
 	for (int i = 1; i < argc; i++)
@@ -244,7 +252,7 @@ int main(int argc, const char *argv[])
 			char *p = (char *)(argv[i] + 1);
 			while (*p)
 			{
-				switch (tolower(*p)) // Convert option to lowercase
+				switch (*p)
 				{
 				case 'a':
 					op_a = 1;
@@ -265,7 +273,7 @@ int main(int argc, const char *argv[])
 					op_L = 1;
 					break;
 				case 'd':
-					op_d = 1; // Mark -d option as enabled
+					op_d = 1;
 					break;
 				case 't':
 					op_t = 1; // Mark -t option as enabled
@@ -283,15 +291,12 @@ int main(int argc, const char *argv[])
 		else
 		{
 			// Treat non-option arguments as directories or files to list
-			_ls(argv[i], op_a, op_l, op_R, op_A, op_L, op_d, op_r, op_t, op_S);
+			dir = argv[i];
 		}
 	}
 
-	// If no non-option arguments are provided, list the current directory
-	if (argc == 1 || (argc == 2 && (op_a || op_l || op_R || op_A || op_L || op_d || op_r || op_t || op_S)))
-	{
-		_ls(".", op_a, op_l, op_R, op_A, op_L, op_d, op_r, op_t, op_S);
-	}
+	// Call _ls() with the specified options
+	_ls(dir, op_a, op_l, op_R, op_A, op_L, op_d, op_r, op_t, op_S);
 
 	return 0;
 }
