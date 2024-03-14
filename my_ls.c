@@ -2,232 +2,120 @@
 #include <dirent.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <string.h>
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <pwd.h>
 #include <grp.h>
 #include <time.h>
-#include <ctype.h>
-#include <sys/ioctl.h>
+#include <string.h>
 
-// Definition of the comparison function for sorting file names
+// Fonction de comparaison pour qsort
 int compare(const void *a, const void *b)
 {
-    return strcmp(*(const char **)a, *(const char **)b);
+	const struct dirent *entryA = *(const struct dirent **)a;
+	const struct dirent *entryB = *(const struct dirent **)b;
+
+	// Utilisation de strcasecmp pour ignorer la casse des lettres
+	return strcasecmp(entryA->d_name, entryB->d_name);
 }
 
-void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int op_d, int op_r);
-
-void print_file_info(const char *filename, struct stat *statbuf);
-
-void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int op_d, int op_r)
+void list_files(const char *dir, struct dirent ***entries, int *num_entries)
 {
-    // If -d is specified, print only directory name and return
-    if (op_d)
-    {
-        printf("%s\n", dir);
-        return;
-    }
-
-    // Open the directory
-    DIR *dh = opendir(dir);
-    if (!dh)
-    {
-        // Handle errors
-        perror("Cannot read directory");
-        exit(EXIT_FAILURE);
-    }
-
-    struct dirent *d;
-    int printed = 0; // Track if anything is printed
-
-    // Array to store file names
-    char *files[1024];
-    int count = 0;
-
-    // Read file names in the directory
-    while ((d = readdir(dh)) != NULL)
-    {
-        // Include . and .. entries if -a option is specified
-        if (op_a && (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0))
-        {
-            files[count++] = strdup(d->d_name);
-            continue;
-        }
-
-        // Exclude hidden entries if -a option is not provided
-        if (!op_a && d->d_name[0] == '.')
-        {
-            // Exclude other hidden entries
-            continue;
-        }
-
-        // Store file name in the array
-        files[count++] = strdup(d->d_name);
-    }
-
-    // Close the directory
-    closedir(dh);
-
-    // Sort file names
-    qsort(files, count, sizeof(char *), compare);
-
-    // Reverse the order if -r option is specified
-    if (op_r)
-    {
-        for (int i = 0; i < count / 2; i++)
-        {
-            char *temp = files[i];
-            files[i] = files[count - i - 1];
-            files[count - i - 1] = temp;
-        }
-    }
-
-    // Print sorted file names or file details based on option
-    for (int i = 0; i < count; i++)
-    {
-        if (op_l)
-        {
-            // If -l option is enabled, print file details
-            char path[PATH_MAX];
-            snprintf(path, sizeof(path), "%s/%s", dir, files[i]);
-
-            struct stat statbuf;
-            if (stat(path, &statbuf) == -1)
-            {
-                // Handle error
-                perror("Failed to get file status");
-                exit(EXIT_FAILURE);
-            }
-
-            print_file_info(files[i], &statbuf);
-        }
-        else
-        {
-            // If -l option is not enabled, print only file names
-            printf("%-10s ", files[i]); // Use %-10s to left-align with width of 10 characters
-            printed = 1;
-        }
-    }
-
-    // Add a new line at the end if -l option is not specified and something was printed
-    if (!op_l && printed)
-        printf("\n");
-
-    // Free memory allocated for file names
-    for (int i = 0; i < count; i++)
-    {
-        free(files[i]);
-    }
+	*num_entries = scandir(dir, entries, NULL, alphasort);
+	if (*num_entries == -1)
+	{
+		perror("Erreur lors de la lecture du répertoire");
+		exit(EXIT_FAILURE);
+	}
+	// Trier les entrées
+	qsort(*entries, *num_entries, sizeof(struct dirent *), compare);
 }
 
-void print_file_info(const char *filename, struct stat *statbuf)
+void ls(const char *dir, int detailed)
 {
-    // Declare variables needed for date and time
-    char time_str[20];
-    struct tm *tm_info;
+	struct dirent **entries;
+	int num_entries;
+	struct stat fileStat;
 
-    // Check if the file is a directory
-    if (S_ISDIR(statbuf->st_mode))
-        printf("d");
-    else
-        printf("-");
+	list_files(dir, &entries, &num_entries);
 
-    // Check permissions for user, group, and others
-    printf("%c%c%c%c%c%c%c%c%c ",
-           (statbuf->st_mode & S_IRUSR) ? 'r' : '-',
-           (statbuf->st_mode & S_IWUSR) ? 'w' : '-',
-           (statbuf->st_mode & S_IXUSR) ? 'x' : '-',
-           (statbuf->st_mode & S_IRGRP) ? 'r' : '-',
-           (statbuf->st_mode & S_IWGRP) ? 'w' : '-',
-           (statbuf->st_mode & S_IXGRP) ? 'x' : '-',
-           (statbuf->st_mode & S_IROTH) ? 'r' : '-',
-           (statbuf->st_mode & S_IWOTH) ? 'w' : '-',
-           (statbuf->st_mode & S_IXOTH) ? 'x' : '-');
+	for (int i = 0; i < num_entries; ++i)
+	{
+		if (strcmp(entries[i]->d_name, ".") == 0 || strcmp(entries[i]->d_name, "..") == 0 || strcmp(entries[i]->d_name, ".git") == 0)
+		{
+			continue;
+		}
 
-    // Display number of hard links with a field width of 2 characters
-    printf("%2ld ", (long)statbuf->st_nlink);
+		char filename[1024];
+		snprintf(filename, sizeof(filename), "%s/%s", dir, entries[i]->d_name);
 
-    // Display user and group name with a field width of 8 characters each
-    struct passwd *pwd = getpwuid(statbuf->st_uid);
-    struct group *grp = getgrgid(statbuf->st_gid);
-    printf("%-6s %-8s ", pwd ? pwd->pw_name : "unknown", grp ? grp->gr_name : "unknown");
+		if (lstat(filename, &fileStat) == -1)
+		{
+			perror("Erreur lors de la lecture des informations du fichier");
+			continue;
+		}
 
-    // Display file size with a field width of 8 characters
-    printf("%8lld ", (long long)statbuf->st_size);
+		if (detailed)
+		{
+			// Affichage détaillé des fichiers
+			char perms[11];
+			snprintf(perms, sizeof(perms), "%c%c%c%c%c%c%c%c%c%c",
+					 (S_ISDIR(fileStat.st_mode)) ? 'd' : '-',
+					 (fileStat.st_mode & S_IRUSR) ? 'r' : '-',
+					 (fileStat.st_mode & S_IWUSR) ? 'w' : '-',
+					 (fileStat.st_mode & S_IXUSR) ? 'x' : '-',
+					 (fileStat.st_mode & S_IRGRP) ? 'r' : '-',
+					 (fileStat.st_mode & S_IWGRP) ? 'w' : '-',
+					 (fileStat.st_mode & S_IXGRP) ? 'x' : '-',
+					 (fileStat.st_mode & S_IROTH) ? 'r' : '-',
+					 (fileStat.st_mode & S_IWOTH) ? 'w' : '-',
+					 (fileStat.st_mode & S_IXOTH) ? 'x' : '-');
 
-    // Get last modification date and time
-    tm_info = localtime(&(statbuf->st_mtime));
-    strftime(time_str, 20, "%b %e %H:%M", tm_info);
+			struct passwd *user = getpwuid(fileStat.st_uid);
+			struct group *group = getgrgid(fileStat.st_gid);
 
-    // Display date and time
-    printf("%s ", time_str);
+			char date[20];
+			strftime(date, sizeof(date), "%b %d %H:%M", localtime(&fileStat.st_mtime));
 
-    // Display file name
-    printf("%s\n", filename);
+			printf("%s %ld %s %s %ld %s %s\n", perms, (long)fileStat.st_nlink, user->pw_name, group->gr_name, (long)fileStat.st_size, date, entries[i]->d_name);
+		}
+		else
+		{
+			// Affichage simple des noms de fichiers
+			printf("%s  ", entries[i]->d_name);
+		}
+	}
+
+	for (int i = 0; i < num_entries; ++i)
+	{
+		free(entries[i]);
+	}
+	free(entries);
 }
 
 int main(int argc, const char *argv[])
 {
-    int op_a = 0, op_l = 0, op_R = 0, op_A = 0, op_L = 0, op_d = 0, op_r = 0;
+	int detailed = 0;
+	const char *dir = ".";
 
-    if (argc == 1)
-    {
-        // If no option is provided, default behavior is to list directory contents without details
-        _ls(".", op_a, op_l, op_R, op_A, op_L, op_d, op_r);
-    }
-    else
-    {
-        // Parse command-line options provided
-        for (int i = 1; i < argc; i++)
-        {
-            if (argv[i][0] == '-')
-            {
-                char *p = (char *)(argv[i] + 1);
-                while (*p)
-                {
-                    switch (tolower(*p)) // Convert option to lowercase
-                    {
-                    case 'a':
-                        op_a = 1;
-                        break;
-                    case 'l':
-                        op_l = 1;
-                        break;
-                    case 'r':
-                        op_r = 1;
-                        break;
-                    case 'R':
-                        op_R = 1;
-                        break;
-                    case 'A':
-                        op_A = 1;
-                        break;
-                    case 'L':
-                        op_L = 1;
-                        break;
-                    case 'd':
-                        op_d = 1; // Mark -d option as enabled
-                        break;
-                    default:
-                        fprintf(stderr, "Option '%c' not available\n", *p);
-                        exit(EXIT_FAILURE);
-                    }
-                    p++;
-                }
-            }
-            else
-            {
-                // If a non-option argument is encountered, treat it as the directory to list
-                _ls(argv[i], op_a, op_l, op_R, op_A, op_L, op_d, op_r);
-                // Exit after processing the specified directory
-                return 0;
-            }
-        }
+	if (argc > 1)
+	{
+		if (strcmp(argv[1], "-l") == 0)
+		{
+			detailed = 1;
+			if (argc > 2)
+			{
+				dir = argv[2];
+			}
+		}
+		else
+		{
+			dir = argv[1];
+		}
+	}
 
-        // Call _ls with specified options
-        _ls(".", op_a, op_l, op_R, op_A, op_L, op_d, op_r);
-    }
+	ls(dir, detailed);
 
-    return 0;
+	return 0;
 }
