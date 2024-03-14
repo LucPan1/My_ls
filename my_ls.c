@@ -9,6 +9,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <sys/ioctl.h>
+#include <limits.h> // Pour PATH_MAX
 
 // Definition of the comparison function for sorting file names by modification time
 int compare_mtime(const void *a, const void *b)
@@ -34,10 +35,20 @@ int compare(const void *a, const void *b)
 	const char *filenameB = *(const char **)b;
 	return strcmp(filenameA, filenameB);
 }
+
 void print_file_info(const char *filename, struct stat *statbuf);
 
 void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int op_d, int op_r, int op_t)
 {
+	// Remove trailing '/' if present in the directory path
+	char directory[PATH_MAX];
+	strncpy(directory, dir, PATH_MAX);
+	size_t len = strlen(directory);
+	if (len > 0 && directory[len - 1] == '/')
+	{
+		directory[len - 1] = '\0';
+	}
+
 	struct stat dir_stat; // Variable pour stocker les informations sur le répertoire
 	if (stat(dir, &dir_stat) == -1)
 	{
@@ -47,13 +58,16 @@ void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int 
 
 	if (S_ISDIR(dir_stat.st_mode))
 	{
-		// Si le chemin est un répertoire, imprimez son nom et retournez
-		printf("%s:\n", dir);
+		// Si le chemin est un répertoire, imprimez son nom seulement s'il n'est pas le répertoire courant
+		if (strcmp(dir, ".") != 0)
+		{
+			printf("%s:\n", dir);
+		}
 	}
 	else
 	{
 		// Si le chemin n'est pas un répertoire, affichez simplement le nom du fichier
-		printf("%s\n", dir);
+		printf("%s", dir);
 		return; // Sortie de la fonction si le chemin n'est pas un répertoire
 	}
 	// If -d is specified, print only directory name and return
@@ -82,22 +96,26 @@ void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int 
 	// Read file names in the directory
 	while ((d = readdir(dh)) != NULL)
 	{
-		// Include . and .. entries if -a option is specified
-		if (op_a && (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0))
+		// Include hidden entries if -A option is specified, but exclude . and ..
+		if (op_A && strcmp(d->d_name, ".") != 0 && strcmp(d->d_name, "..") != 0)
 		{
 			files[count++] = strdup(d->d_name);
-			continue;
 		}
-
-		// Exclude hidden entries if -a option is not provided
-		if (!op_a && d->d_name[0] == '.')
+		// Include . and .. entries if -a option is specified and -A is not specified
+		else if (op_a && !op_A && (strcmp(d->d_name, ".") == 0 || strcmp(d->d_name, "..") == 0))
 		{
-			// Exclude other hidden entries
-			continue;
+			files[count++] = strdup(d->d_name);
 		}
-
-		// Store file name in the array
-		files[count++] = strdup(d->d_name);
+		// Include hidden entries if -a option is specified and -A is not specified
+		else if (op_a && !op_A && d->d_name[0] == '.')
+		{
+			files[count++] = strdup(d->d_name);
+		}
+		// Exclude hidden entries if neither -a nor -A option is specified
+		else if (!op_a && !op_A && strcmp(d->d_name, ".") != 0 && strcmp(d->d_name, "..") != 0)
+		{
+			files[count++] = strdup(d->d_name);
+		}
 	}
 
 	// Close the directory
@@ -131,11 +149,11 @@ void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int 
 		if (op_l)
 		{
 			// If -l option is enabled, print file details
-			char path[PATH_MAX];
-			snprintf(path, sizeof(path), "%s/%s", dir, files[i]);
+			char full_path[PATH_MAX];
+			snprintf(full_path, sizeof(full_path), "%s/%s", dir, files[i]);
 
 			struct stat statbuf;
-			if (stat(path, &statbuf) == -1)
+			if (stat(full_path, &statbuf) == -1)
 			{
 				// Handle error
 				perror("Failed to get file status");
@@ -160,6 +178,30 @@ void _ls(const char *dir, int op_a, int op_l, int op_R, int op_A, int op_L, int 
 	for (int i = 0; i < count; i++)
 	{
 		free(files[i]);
+	}
+
+	// Recursively list subdirectories if -R option is specified
+	if (op_R)
+	{
+		for (int i = 0; i < count; i++)
+		{
+			char full_path[PATH_MAX];
+			snprintf(full_path, sizeof(full_path), "%s/%s", dir, files[i]);
+
+			struct stat statbuf;
+			if (stat(full_path, &statbuf) == -1)
+			{
+				// Handle error
+				perror("Failed to get file status");
+				exit(EXIT_FAILURE);
+			}
+
+			if (S_ISDIR(statbuf.st_mode))
+			{
+				printf("\n");
+				_ls(full_path, op_a, op_l, op_R, op_A, op_L, op_d, op_r, op_t);
+			}
+		}
 	}
 }
 
